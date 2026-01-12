@@ -1,165 +1,127 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import ChatPanel, { Message } from "./components/ChatPanel";
-import CodePreviewPanel from "./components/CodePreviewPanel";
-
-// Strip markdown code fences from generated code
-function stripCodeFences(code: string): string {
-  // Remove opening fence: ```tsx, ```typescript, ```jsx, ```javascript, or just ```
-  let stripped = code.replace(/^```(?:tsx?|jsx?|typescript|javascript)?\s*\n?/i, "");
-  // Remove closing fence: ```
-  stripped = stripped.replace(/\n?```\s*$/i, "");
-  return stripped;
-}
+import Link from "next/link";
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [generatedCode, setGeneratedCode] = useState<string>("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [splitPosition, setSplitPosition] = useState(38.2); // golden ratio: ~38.2% : ~61.8%
-  const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return;
-      
-      const container = containerRef.current;
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = (x / rect.width) * 100;
-      
-      // Clamp between 25% and 75%
-      setSplitPosition(Math.min(75, Math.max(25, percentage)));
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isDragging]);
-
-  const handleSend = useCallback(async (prompt: string) => {
-    // Add user message
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: prompt,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsGenerating(true);
-    setGeneratedCode("");
-
-    try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          history: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullCode = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          fullCode += chunk;
-          setGeneratedCode(stripCodeFences(fullCode));
-        }
-      }
-
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "Component generated successfully! Check the Code tab to see the result.",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Generation error:", error);
-      const errorMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "Sorry, there was an error generating the component. Please try again.",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [messages]);
-
   return (
-    <div 
-      ref={containerRef}
-      className="flex h-screen w-screen overflow-hidden"
-      style={{ backgroundColor: 'var(--bg-primary)' }}
+    <div
+      className="flex min-h-screen flex-col items-center justify-center"
+      style={{ backgroundColor: "var(--bg-primary)" }}
     >
-      {/* Left Panel - Chat */}
-      <div 
-        className="h-full shrink-0"
-        style={{ width: `${splitPosition}%` }}
-      >
-        <ChatPanel
-          messages={messages}
-          onSend={handleSend}
-          isGenerating={isGenerating}
-        />
-      </div>
+      <div className="max-w-2xl px-8 text-center">
+        {/* Logo/Icon */}
+        <div
+          className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: "var(--bg-elevated)" }}
+        >
+          <svg
+            className="h-10 w-10"
+            style={{ color: "var(--text-muted)" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M12 3v18M3 12h18"
+            />
+          </svg>
+        </div>
 
-      {/* Resizable Divider */}
-      <div
-        className="group relative h-full w-1 shrink-0 cursor-col-resize transition-colors"
-        style={{ 
-          backgroundColor: isDragging ? 'var(--divider-hover)' : 'var(--divider)',
-        }}
-        onMouseDown={() => setIsDragging(true)}
-        onMouseEnter={(e) => {
-          if (!isDragging) {
-            e.currentTarget.style.backgroundColor = 'var(--divider-hover)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isDragging) {
-            e.currentTarget.style.backgroundColor = 'var(--divider)';
-          }
-        }}
-      >
-        <div 
-          className="absolute inset-y-0 -left-1 -right-1"
-          style={{ backgroundColor: isDragging ? 'rgba(16, 185, 129, 0.1)' : 'transparent' }}
-        />
-      </div>
+        {/* Title */}
+        <h1
+          className="mb-4 text-4xl font-semibold tracking-tight"
+          style={{ color: "var(--text-primary)" }}
+        >
+          UI Interpolation
+        </h1>
 
-      {/* Right Panel - Code/Preview */}
-      <div className="h-full min-w-0 flex-1">
-        <CodePreviewPanel code={generatedCode} isStreaming={isGenerating} />
+        {/* Description */}
+        <p
+          className="mb-8 text-lg leading-relaxed"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Generate two different UIs, then interpolate between them to create
+          smooth transitions with in-situ customization controls.
+        </p>
+
+        {/* CTA Button */}
+        <Link
+          href="/interpolation-tester"
+          className="inline-flex items-center gap-2 rounded-xl px-8 py-4 text-base font-medium text-white transition-all"
+          style={{ backgroundColor: "var(--accent)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "var(--accent-hover)";
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "var(--accent)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
+        >
+          Open Interpolation Tester
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 7l5 5m0 0l-5 5m5-5H6"
+            />
+          </svg>
+        </Link>
+
+        {/* Features */}
+        <div className="mt-16 grid grid-cols-3 gap-6">
+          {[
+            {
+              title: "Generate",
+              description: "Create two different UI variants via chat",
+            },
+            {
+              title: "Interpolate",
+              description: "Generate intermediate states between UIs",
+            },
+            {
+              title: "Customize",
+              description: "Use direct manipulation to transition states",
+            },
+          ].map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-xl p-5"
+              style={{
+                backgroundColor: "var(--bg-secondary)",
+                border: "1px solid var(--border-primary)",
+              }}
+            >
+              <h3
+                className="mb-2 text-sm font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {feature.title}
+              </h3>
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {feature.description}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
